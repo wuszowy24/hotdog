@@ -876,12 +876,15 @@ function buildRoom(R,idx){
   }
   if(R.id==='bath'){
     const tub=g.add(new Node());tub.p=[0,0,.35];
-    box(tub,1.75,.36,.85,.32,M('#FFFFFF'),[0,.36,0]);
-    sph(tub,M('#9FD8F5',0,{unlit:true,alpha:.9,pat:12,pc:hex3('#C6ECFB'),ps:3}),[0,.6,0],[1.6,.01,.72]);
+    const tw=M('#FFFFFF');
+    box(tub,1.75,.18,.13,.12,tw,[0,.18,.72]);box(tub,1.75,.3,.13,.12,tw,[0,.3,-.72]);
+    box(tub,.13,.3,.85,.12,tw,[1.62,.3,0]);box(tub,.13,.3,.85,.12,tw,[-1.62,.3,0]);
+    box(tub,1.6,.07,.75,.06,M('#E6F3FA',0),[0,.07,0]);
+    sph(tub,M('#9FD8F5',0,{unlit:true,alpha:.45,pat:12,pc:hex3('#C6ECFB'),ps:3}),[0,.3,0],[1.5,.01,.6]);
     for(const x of[-1.4,1.4])for(const z of[-.6,.6])sph(tub,M('#E8B730',.015,{shiny:true}),[x,.02,z],[.09,.06,.09]);
-    const duck=tub.add(new Node());duck.p=[1.05,.66,.35];duck.r=[0,-.6,0];
+    const duck=tub.add(new Node());duck.p=[1.05,.36,.3];duck.r=[0,-.6,0];
     sph(duck,M('#FFD43B'),[0,0,0],[.17,.12,.14]);sph(duck,M('#FFD43B'),[.12,.15,0],[.1,.1,.1]);sph(duck,M('#F08C2E'),[.22,.14,0],[.06,.03,.05]);
-    for(let i=0;i<9;i++)sph(tub,M('#FFFFFF',.012,{shiny:true}),[-1.3+i*.32,.66,-.55+((i*7)%5)*.25],[.1,.08,.1]);
+    for(let i=0;i<9;i++)sph(tub,M('#FFFFFF',.012,{shiny:true}),[-1.3+i*.32,.34,-.5+((i*7)%5)*.22],[.1,.08,.1]);
     blob(tub,0,0,1.9,1);g.tub=tub;g.spot={p:[0,0,.4],y:.36};
     box(g,7,1.3,.04,.03,M('#FFFFFF',0,{pat:7,pc:hex3('#D7EEFA'),ps:3}),[0,1.3,-2.95]);
     const mi=g.add(new Node());mi.p=[-2.3,2.6,-2.9];box(mi,.55,.7,.05,.25,M('#FFFFFF'),[0,0,0]);box(mi,.46,.6,.03,.22,M('#DDF2FF',0,{unlit:true,pat:10,pc:hex3('#BFE3F6'),ps:1.2,seed:2}),[0,0,.05]);
@@ -893,7 +896,7 @@ function buildRoom(R,idx){
   if(R.id==='bed'){
     window_(2.2,2.4,true,'#8E7CD8');
     const bed=g.add(new Node());bed.p=[0,0,.4];
-    const rim=bed.add(new Node(geoTorus(1.35,.32),M('#7E5BC4')));rim.p=[0,.3,0];rim.s=[1.1,.95,.8];
+    const rim=bed.add(new Node(geoTorus(1.35,.3),M('#7E5BC4')));rim.p=[0,.2,0];rim.s=[1.1,.6,.8];
     box(bed,1.4,.13,.95,.13,M('#D8C2F5'),[0,.15,0]);sph(bed,M('#FFFFFF'),[1.05,.38,-.25],[.35,.14,.28]);blob(bed,0,0,1.8,1.15);
     g.spot={p:[0,0,.4],y:.27};
     const ns=g.add(new Node());ns.p=[-2.8,0,-1.9];
@@ -1064,7 +1067,7 @@ function envFor(){
   if(R.dark)return{clear:cc.concat(1),k:.68,amb:.48,key:[1,.92,1.08],shade:[.42,.38,.78],sky:[.85,.8,1.05],gnd:[.55,.45,.8]};
   return{clear:cc.concat(1)};
 }
-function camFor(){const x=M.off*ROOM_W;return{eye:[x,2.6,10.4],target:[x+.1,.62,.35],fov:24,width:4.1,minAsp:.1}}
+function camFor(){const x=M.off*ROOM_W,sg=S?stage(D()):'adult',z=sg==='pup'?.66:sg==='young'?.84:1;return{eye:[x,1.1+1.5*z,4.3+6.1*z],target:[x+.1,.35+.27*z,.35],fov:24,width:4.1*z,minAsp:.1}}
 function loop(ts){
   requestAnimationFrame(loop);
   const dt=Math.min(.05,(ts-M.last)/1000||0);M.last=ts;
@@ -1079,7 +1082,7 @@ function loop(ts){
   dog.setDirt(clamp((65-st.clean)/65,0,1)*(M.rinsing>0?Math.max(0,M.rinsing-.3):1));
   moveDog(dt,d);
   const room=M.rooms[M.dogPage];
-  let yUp=0;if(room.spot.y){const sp=spotOf(M.dogPage),dd=Math.hypot(M.pos[0]-sp[0],M.pos[2]-sp[2]),R=room.spotR||1.3;yUp=room.spot.y*clamp((R-dd)/(R*.55),0,1)}
+  let yUp=0;if(room.spot.y){const sp=spotOf(M.dogPage),dd=Math.hypot(M.pos[0]-sp[0],M.pos[2]-sp[2]),R=room.spotR||1.3;yUp=spotY(M.dogPage)*clamp((R-dd)/(R*.55),0,1)}
   M.dogY=(M.dogY||0)+(yUp-(M.dogY||0))*Math.min(1,dt*10);
   dog.root.p=[M.pos[0],M.dogY,M.pos[2]];dog.root.r=[0,M.yaw,0];
   dog.update(dt);
@@ -1131,7 +1134,7 @@ function idleBrain(dt,d){
   M.idle-=dt;if(M.idle>0||M.dogPage!==M.page)return;
   const r=Math.random();
   if(R.wander&&r<.42){M.target={p:freeSpot(M.dogPage),cb:()=>{M.onSpot=Math.hypot(M.pos[0]-spotOf(M.dogPage)[0],M.pos[2]-spotOf(M.dogPage)[2])<.2}};return}
-  const pool=[];for(const[a,dur,w]of IDLE_ACTS){let ww=w;if(a==='yawn'&&st.energy<40)ww+=3;if(a==='lie'&&st.energy<45)ww+=3;if((a==='lie'||a==='sit')&&['bath'].includes(R.id))ww=0;if(a==='sniff'&&R.id==='garden')ww+=3;for(let i=0;i<ww;i++)pool.push([a,dur])}
+  const pool=[];for(const[a,dur,w]of IDLE_ACTS){let ww=w;if(a==='yawn'&&st.energy<40)ww+=3;if(a==='lie'&&st.energy<45)ww+=3;if(['lie','sit','scratch','stretch'].includes(a)&&['bath','wardrobe'].includes(R.id))ww=0;if(a==='sniff'&&R.id==='garden')ww+=3;for(let i=0;i<ww;i++)pool.push([a,dur])}
   const[a,dur]=pool[Math.random()*pool.length|0];A.act=a;M.actT=dur+Math.random()*1.5;if(a==='wag'||a==='lookcam')A.wag=dur;
   if(a==='yawn')setTimeout(()=>sfx('yip'),500);
 }
@@ -1208,6 +1211,7 @@ function checkAccident(){
   renderHUD();
 }
 
+function spotY(i){const r=M.rooms[i];if(ROOMS[i].id==='bath'&&M.dog){const P=M.dog.P,hh=(P.bodyY+P.R*1.6)*P.k;return Math.max(.14,.4-hh*.4)}return r.spot.y}
 function avoid(){
   const r=M.rooms[M.dogPage];if(!r||!r.blocks)return;const rx=roomX(M.dogPage),k=M.dog.P.k;
   for(const b of r.blocks){const dx=M.pos[0]-(rx+b.x),dz=M.pos[2]-b.z,dd=Math.hypot(dx,dz),mn=b.r+.45*k;
@@ -1830,8 +1834,9 @@ function startMemory(){
 }
 
 /* ================= Aktualizacje ================= */
-const GAME_BUILD='1.6';
+const GAME_BUILD='1.7';
 const CHANGES={
+  '1.7':['Szczeniak jest widoczny w wannie, legowisku i na podeście','Kamera przybliża się do małego szczeniaka','Niższe brzegi legowiska'],
   '1.6':['Powiadomienie o aktualizacjach gry','Prezent 10 monet za każdą aktualizację'],
   '1.5':['Pies wstaje po sztuczkach i można robić kolejne','Otrząsanie po kąpieli i kopanie w Skarbach działają'],
   '1.4':['Pies nie zawiesza się już przed wyjściem na siku','Łatwiejsza nauka sztuczek','Ubranka także dla szczeniaków','Pies omija meble','Płynniejsza gra']
