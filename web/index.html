@@ -232,6 +232,7 @@ input[type=text]{font:inherit;font-weight:600;font-size:1.05rem;padding:9px 12px
 .pkbtns{position:absolute;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 26px);z-index:5;display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pkb{width:74px;height:74px;border-radius:50%;background:linear-gradient(#FFE17A,var(--yellow));box-shadow:0 4px 0 var(--yellowD),0 6px 14px rgba(0,0,0,.25);font-weight:800;font-size:.78rem;color:#33264A;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
 .pkb .em{font-size:1.6rem}.pkb:active{transform:translateY(3px);box-shadow:0 1px 0 var(--yellowD)}
+.ptag{position:absolute;transform:translate(-50%,-100%);background:rgba(255,255,255,.88);color:#33264A;border-radius:10px;padding:1px 8px;font-size:.78rem;font-weight:800;white-space:nowrap;box-shadow:0 2px 6px rgba(40,20,60,.2)}
 .err{padding:30px;text-align:center;font-weight:700}
 @media (max-height:700px){.it{width:70px}.it .em{font-size:1.6rem}.ab{min-height:44px}.gc{min-height:70px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
@@ -1175,8 +1176,10 @@ function loop(ts){
   if(M.rinsing>0){M.rinsing-=dt;for(const f of dog.foam.kids)f.s=f.s.map(v=>Math.max(0,v-dt*.25));if(M.rinsing<=0){dog.foam.kids.length=0;finishRinse()}}
   const bed=M.rooms[3];if(bed.lamp){const on=!d.sleeping;bed.lamp.mat.unlit=on;bed.lamp.mat.c=hex3(on?'#FFE27A':'#B8A65E')}
   M.cam=camFor();
+  homeSync(dt,d);
   M.eng.render(M.scene,M.cam,envFor());
   updateAnchors(d,st);
+  partnerTag();
 }
 function moveDog(dt,d){
   const A=M.dog.A;
@@ -1303,6 +1306,39 @@ function avoid(){
   M.pos[2]=clamp(M.pos[2],-2.3,2.2);
 }
 function freeSpot(i){const r=M.rooms[i],rx=roomX(i);for(let n=0;n<20;n++){const x=(Math.random()-.5)*2.8,z=-.2+Math.random()*1.4;if(r.blocks.every(b=>Math.hypot(x-b.x,z-b.z)>b.r+.5)&&(!r.spotR||Math.hypot(x-r.spot.p[0],z-r.spot.p[2])>r.spotR))return[rx+x,0,z]}return spotOf(i)}
+/* ---- drugi pies w domu (tryb Razem) ---- */
+const PH={dog:null,sig:'',pos:null,yaw:0,y:0,lastSend:0,lastSig:'',actKey:''};
+function homeSync(dt,d){
+  if(!ROOM||!NET.ok()){if(PH.dog){M.scene.remove(PH.dog.root);PH.dog=null}return}
+  const now=Date.now(),A=M.dog.A;
+  const act=A.trick?A.trick.name:(A.act||'');
+  const st={page:M.dogPage,x:+(M.pos[0]-roomX(M.dogPage)).toFixed(2),z:+M.pos[2].toFixed(2),y:+(M.dogY||0).toFixed(2),yaw:+M.yaw.toFixed(2),mv:+(A.move||0).toFixed(1),act,eat:A.eat>0?1:0,sleep:d.sleeping?1:0,name:S.player||'Gracz',dog:profile(d),at:now};
+  const sig=JSON.stringify([st.page,st.x,st.z,st.yaw,st.mv,st.act,st.eat,st.sleep]);
+  if((sig!==PH.lastSig&&now-PH.lastSend>180)||now-PH.lastSend>2500){PH.lastSig=sig;PH.lastSend=now;NET.put(`rooms/${ROOM.code}/home/${S.pid}`,st).catch(()=>{})}
+  let ps=null;const hm=ROOM.data.home||{};for(const pid in hm)if(pid!==S.pid&&hm[pid]&&now-hm[pid].at<20000)ps=hm[pid];
+  if(!ps||!ps.dog||ps.dog.id===d.id){if(PH.dog){M.scene.remove(PH.dog.root);PH.dog=null;PH.pos=null}return}
+  const dsig=JSON.stringify([ps.dog.coat,ps.dog.color,ps.dog.sex,ps.dog.stage,ps.dog.wear]);
+  if(dsig!==PH.sig||!PH.dog){if(PH.dog)M.scene.remove(PH.dog.root);PH.dog=buildDog(ps.dog,{stage:ps.dog.stage||'adult',wear:ps.dog.wear});PH.dog.A.tongue=true;M.scene.add(PH.dog.root);PH.sig=dsig;PH.pos=null}
+  let tx=roomX(ps.page)+ps.x,tz=ps.z;
+  if(ps.page===M.dogPage){const dx=tx-M.pos[0],dz=tz-M.pos[2];if(Math.abs(dz)<1.2&&Math.abs(dx)<2.4){tx=M.pos[0]-1.5;tz=M.pos[2]-1.3}}
+  if(!PH.pos||Math.abs(PH.pos[0]-tx)>6)PH.pos=[tx,0,tz];
+  const k=Math.min(1,dt*8);PH.pos[0]+=(tx-PH.pos[0])*k;PH.pos[2]+=(tz-PH.pos[2])*k;PH.yaw=lerpAng(PH.yaw,ps.yaw,Math.min(1,dt*10));PH.y+=((ps.y||0)-PH.y)*k;
+  const P=PH.dog,PA=P.A;
+  PA.move=Math.max(ps.mv,Math.hypot(tx-PH.pos[0],tz-PH.pos[2])>.25?2:0);PA.sleep=!!ps.sleep;
+  const key=ps.act+'|'+ps.page;
+  if(ps.act&&TRICKS.some(t=>t.id===ps.act)){if(PH.actKey!==key){PA.trick={name:ps.act,t:0,dur:(TRICKS.find(t=>t.id===ps.act)||{}).dur||1.5}}}
+  else{PA.act=ps.act&&!['pee_m','squat','poop'].includes(ps.act)||ps.act==='sorry'?ps.act:(ps.act||null)}
+  PH.actKey=key;if(ps.eat&&PA.eat<=0)PA.eat=1;
+  P.root.p=[PH.pos[0],PH.y,PH.pos[2]];P.root.r=[0,PH.yaw,0];P.update(dt);
+  PH.name=ps.name;PH.dname=ps.dog.name;PH.page=ps.page;
+}
+function partnerTag(){
+  let el=$('#ptag');
+  if(!PH.dog||PH.page!==M.page||Math.abs(M.off-M.page)>.4){if(el)el.remove();return}
+  const p=M.eng.project(M.cam,PH.dog.headWorld());
+  if(!el){el=document.createElement('div');el.id='ptag';el.className='ptag';$('#fx').appendChild(el)}
+  el.textContent=`${PH.dname} (${PH.name})`;el.style.left=p[0]+'px';el.style.top=(p[1]-26)+'px';
+}
 function lerpAng(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;return a+d*t}
 function goTo(p,cb){M.target={p,cb};M.idle=99}
 function dogHere(){return M.dogPage===M.page&&Math.abs(M.off-M.page)<.05}
@@ -1324,6 +1360,7 @@ function setupInput(){
   cv.addEventListener('pointerdown',e=>{
     if(!S||!M.dog)return;
     const x=e.clientX,y=e.clientY,ray=M.eng.ray(M.cam,x,y),mg=pickMess(ray);if(mg){cleanMess(mg,x,y);st=null;return}
+    if(PH.dog&&PH.page===M.page){const ph=pickRay(ray,PH.dog.pick);const mine=dogHere()?pickRay(ray,M.dog.pick):null;if(ph&&(!mine||ph.t<mine.t)){PH.dog.A.bounce=1;PH.dog.A.wag=2;floatAt('💗',x,y);sendInbox({type:'pet'}).catch(()=>{});st=null;return}}
     const hit=dogHere()?pickRay(ray,M.dog.pick):null;
     const id=R0().id;
     st={x,y,hit:!!hit,mode:null,t:performance.now(),lastFoam:null,startOff:M.off,lx:x};
@@ -1790,6 +1827,7 @@ function handleMsg(m){
   if(m.type==='emote'){const h=M.anchors&&M.anchors.head;const x=h?h[0]:innerWidth/2,y=h?h[1]-40:innerHeight/2;
     for(let i=0;i<5;i++)setTimeout(()=>floatAt(m.emote,x+(Math.random()-.5)*120,y+(Math.random()-.5)*60),i*160);
     toast(`${who}: ${m.emote}`);if(M.dog){M.dog.A.wag=2;M.dog.A.bounce=1}bark(D())}
+  if(m.type==='pet'){if(M.dog){M.dog.A.wag=2;M.dog.A.bounce=1;const h=M.anchors.head;if(h)for(let i=0;i<3;i++)setTimeout(()=>floatAt('💗',h[0]+(Math.random()-.5)*60,h[1]),i*200)}bump(D(),{fun:2});toast(`${who} głaszcze Twojego psa 💗`);return}
   if(m.type==='park'){if(!$('#game').hidden)return;const el=$('#invite');el.hidden=false;el.dataset.id='park';
     el.innerHTML=`<div class="result"><div class="rcard"><div class="updicon">🌳</div><h3>Park!</h3><p>${who} idzie z psem do parku. Dołączysz?</p><div class="setrow" style="justify-content:center"><button class="btn ghost" id="pkNo">Nie teraz</button><button class="btn love" id="pkYes">Idziemy!</button></div></div></div>`;
     sfx('win');$('#pkNo').onclick=hideInvite;$('#pkYes').onclick=()=>{hideInvite();if(D().sleeping){sleepBlock();return}startPark()};return}
@@ -1874,7 +1912,7 @@ async function roomJoin(code){
   S.room=code;save();roomConnect(code);
 }
 function roomLeave(silent){
-  if(ROOM&&S){NET.del(`rooms/${ROOM.code}/players/${S.pid}`).catch(()=>{});NET.del(`rooms/${ROOM.code}/dogs/${S.pid}`).catch(()=>{})}
+  if(ROOM&&S){NET.del(`rooms/${ROOM.code}/home/${S.pid}`).catch(()=>{});NET.del(`rooms/${ROOM.code}/players/${S.pid}`).catch(()=>{});NET.del(`rooms/${ROOM.code}/dogs/${S.pid}`).catch(()=>{})}
   roomClose();if(S){for(const d of S.dogs)d.room=null;S.room=null;save()}
   if(!silent)toast('Opuszczono pokój. Wspólne jamniki zostały u Ciebie.');
 }
@@ -2045,8 +2083,9 @@ function startMemory(){
 }
 
 /* ================= Aktualizacje ================= */
-const GAME_BUILD='2.1';
+const GAME_BUILD='2.2';
 const CHANGES={
+  '2.2':['W trybie Razem pies drugiej osoby jest widoczny w Twoim domu','Widzisz, w którym pokoju jest, co robi i jakie sztuczki wykonuje','Możesz pogłaskać psa drugiej osoby, a ona to zobaczy'],
   '2.1':['Park razem: oba psy w jednym parku, każdy steruje swoim joystickiem','Rzucanie kości w parku, pies drugiej osoby może ją przechwycić','Szczekanie i sztuczki widoczne u obojga','Zaproszenie do parku przychodzi drugiej osobie'],
   '2.0':['Łaty na futrze nie przesuwają się już przy sztuczkach','10 nowych sztuczek: Leżeć, Kręć się, Służ, Ukłon, Daj głos, Piątka, Pan nie żyje, Pomachaj, Taniec, Salto','20 nowych ubrań: cylinder, kowbojski kapelusz, czapka Mikołaja, hełm wikinga, strój dinozaura, pszczółka i więcej','Garderoba z zakładkami: czapki, okulary, szyja, ubranka','Nowe gry: Frisbee i Gdzie kość?','Gra we dwoje: przeciąganie liny, wyścig, emotki i prezenty','Codzienne koło fortuny w Zadaniach'],
   '1.7':['Szczeniak jest widoczny w wannie, legowisku i na podeście','Kamera przybliża się do małego szczeniaka','Niższe brzegi legowiska'],
