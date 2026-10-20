@@ -320,13 +320,14 @@ const M4={
   lookAt(e,c,up){const z=V3.norm(V3.sub(e,c)),x=V3.norm(V3.cross(up,z)),y=V3.cross(z,x),m=new Float32Array(16);
     m[0]=x[0];m[4]=x[1];m[8]=x[2];m[1]=y[0];m[5]=y[1];m[9]=y[2];m[2]=z[0];m[6]=z[1];m[10]=z[2];
     m[12]=-V3.dot(x,e);m[13]=-V3.dot(y,e);m[14]=-V3.dot(z,e);m[15]=1;return m},
-  compose(p,r,s){
+  compose(p,r,s,out){
     const cx=Math.cos(r[0]),sx=Math.sin(r[0]),cy=Math.cos(r[1]),sy=Math.sin(r[1]),cz=Math.cos(r[2]),sz=Math.sin(r[2]);
-    const m=new Float32Array(16);
+    const m=out||new Float32Array(16);
     m[0]=(cy*cz+sy*sx*sz)*s[0];m[1]=(cx*sz)*s[0];m[2]=(-sy*cz+cy*sx*sz)*s[0];
     m[4]=(-cy*sz+sy*sx*cz)*s[1];m[5]=(cx*cz)*s[1];m[6]=(sy*sz+cy*sx*cz)*s[1];
     m[8]=(sy*cx)*s[2];m[9]=(-sx)*s[2];m[10]=(cy*cx)*s[2];
-    m[12]=p[0];m[13]=p[1];m[14]=p[2];m[15]=1;return m},
+    m[3]=0;m[7]=0;m[11]=0;m[12]=p[0];m[13]=p[1];m[14]=p[2];m[15]=1;return m},
+  mulTo(o,a,b){for(let c=0;c<4;c++){const b0=b[c*4],b1=b[c*4+1],b2=b[c*4+2],b3=b[c*4+3];for(let r=0;r<4;r++)o[c*4+r]=a[r]*b0+a[4+r]*b1+a[8+r]*b2+a[12+r]*b3}return o},
   invert(a){
     const o=new Float32Array(16);
     const a00=a[0],a01=a[1],a02=a[2],a03=a[3],a10=a[4],a11=a[5],a12=a[6],a13=a[7],a20=a[8],a21=a[9],a22=a[10],a23=a[11],a30=a[12],a31=a[13],a32=a[14],a33=a[15];
@@ -412,7 +413,15 @@ class Node{
   at(x,y,z){this.p=[x,y,z];return this}
   rot(x,y,z){this.r=[x,y,z];return this}
   sc(x,y,z){this.s=[x,y==null?x:y,z==null?x:z];return this}
-  update(pw){this.world=pw?M4.mul(pw,M4.compose(this.p,this.r,this.s)):M4.compose(this.p,this.r,this.s);for(const k of this.kids)k.update(this.world)}
+  update(pw){
+    if(this.frozen&&this._done){return}
+    if(!this._loc){this._loc=new Float32Array(16);this.world=new Float32Array(16)}
+    M4.compose(this.p,this.r,this.s,this._loc);
+    if(pw)M4.mulTo(this.world,pw,this._loc);else this.world.set(this._loc);
+    this._nm=null;
+    for(const k of this.kids)k.update(this.world);
+    if(this.frozen){this._done=true;this.walk(n=>{if(n.geo)n._nm=M4.nmat(n.world)})}
+  }
   walk(fn,vis){if(vis&&!this.visible)return;fn(this);for(const k of this.kids)k.walk(fn,vis)}
 }
 // material helper: c=color hex, o=outline width
@@ -484,7 +493,7 @@ class Engine{
     gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);
     this.w=1;this.h=1;
   }
-  size(w,h){const dpr=Math.min(2,window.devicePixelRatio||1);w=Math.max(1,w|0);h=Math.max(1,h|0);
+  size(w,h){const dpr=Math.min(this.opt.maxDpr||2,window.devicePixelRatio||1);w=Math.max(1,w|0);h=Math.max(1,h|0);
     if(this.w!==w||this.h!==h||this.dpr!==dpr){this.w=w;this.h=h;this.dpr=dpr;this.c.width=w*dpr;this.c.height=h*dpr;if(!this.opt.fixed){this.c.style.width=w+'px';this.c.style.height=h+'px'}}}
   buf(g){let b=this.bufs.get(g.key);if(b)return b;const gl=this.gl;
     b={p:gl.createBuffer(),n:gl.createBuffer(),i:gl.createBuffer(),cnt:g.i.length};
@@ -515,7 +524,7 @@ class Engine{
       gl.bindBuffer(gl.ARRAY_BUFFER,b.p);gl.enableVertexAttribArray(this.aP);gl.vertexAttribPointer(this.aP,3,gl.FLOAT,false,0,0);
       gl.bindBuffer(gl.ARRAY_BUFFER,b.n);gl.enableVertexAttribArray(this.aN);gl.vertexAttribPointer(this.aN,3,gl.FLOAT,false,0,0);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,b.i);
-      gl.uniformMatrix4fv(u.uM,false,n.world);gl.uniformMatrix3fv(u.uNm,false,M4.nmat(n.world));
+      gl.uniformMatrix4fv(u.uM,false,n.world);gl.uniformMatrix3fv(u.uNm,false,n._nm||(n._nm=M4.nmat(n.world)));
       let sp=I;if(m.space){sp=spaceCache.get(m.space);if(!sp){sp=M4.invert(m.space.world);spaceCache.set(m.space,sp)}}
       gl.uniformMatrix4fv(u.uSp,false,sp);
       gl.uniform1f(u.uOut,outline?m.o*(m.space&&m.space.ow?m.space.ow:1):0);
@@ -555,7 +564,7 @@ function buildDog(d,o){
   const st=o.stage||'adult',P=Object.assign({},DOGP[st]),C=COLORS[d.color]||COLORS.red;
   const long=d.coat==='long',wire=d.coat==='wire',k=P.k;
   const root=new Node(),rig=root.add(new Node());rig.sc(k);rig.ow=Math.max(.8,k);
-  const W=(st==='pup'?{}:(o.wear||{}));
+  const W=o.wear||{};
   const mats=[],pick=[],S=geoSphere(),OL=.008;
   const dm=(c,x)=>{const m=mat(c,OL,Object.assign({space:rig,soft:1},x||{}));mats.push(m);return m};
   const furX={};
@@ -917,6 +926,17 @@ function buildRoom(R,idx){
     sph(g,M('#F28CB3',.02),[3.2,.35,.9],[.6,.38,.55]);blob(g,3.2,.9,.7,.6);
     for(let i=0;i<14;i++)sph(g,M(['#7CFFB2','#FFE27A','#FF8AD0','#7CC6F0'][i%4],0,{unlit:true}),[-6+i*.92,4.6,-3],[.08,.08,.02]);
   }
+  const BL={
+    salon:[[2.35,-2.05,1.45],[3.3,.9,.55],[-3.4,-2.2,.55],[-3.6,-.8,.35]],
+    kitchen:[[-3.1,-2.3,.9],[.9,-2.3,.6],[1.9,-2.3,.6],[2.9,-2.3,.6],[1.55,.85,.5],[2.45,1.1,.4]],
+    bath:[[-3.3,-1.9,.5]],
+    bed:[[-2.8,-1.9,.6],[3.4,-2,.5]],
+    garden:[[-2.7,-1.9,1.1],[-4.6,-2.4,.7],[5,-2.6,.8],[2.2,.9,.25]],
+    wardrobe:[[-2.4,-2.6,.6],[1.4,-2.3,.4],[2.2,-2.3,.4],[3,-2.3,.4],[3.5,.6,.45]],
+    arcade:[[-2.6,-2.35,.75],[0,-2.35,.75],[2.6,-2.35,.75],[3.2,.9,.75]]
+  };
+  g.blocks=(BL[R.id]||[]).map(([x,z,r])=>({x,z,r}));
+  g.spotR={bath:1.9,bed:1.6,wardrobe:1.2}[R.id]||0;
   return g;
 }
 
@@ -999,9 +1019,9 @@ const M={eng:null,scene:null,rooms:[],dog:null,sig:'',cam:null,t:0,last:0,vel:0,
 const R0=()=>ROOMS[M.page];
 const roomX=i=>i*ROOM_W;
 function initMain(){
-  try{M.eng=new Engine($('#stage'))}catch(e){document.body.innerHTML='<div class="err">Twój telefon nie obsługuje grafiki 3D (WebGL).</div>';return false}
+  try{M.eng=new Engine($('#stage'),{maxDpr:1.5})}catch(e){document.body.innerHTML='<div class="err">Twój telefon nie obsługuje grafiki 3D (WebGL).</div>';return false}
   const rs=()=>M.eng.size(window.innerWidth,window.innerHeight);rs();window.addEventListener('resize',rs);
-  M.scene=new Node();M.rooms=ROOMS.map((R,i)=>M.scene.add(buildRoom(R,i)));(S&&S.messes||[]).forEach(buildMess);
+  M.scene=new Node();M.rooms=ROOMS.map((R,i)=>{const r=M.scene.add(buildRoom(R,i));r.frozen=true;return r});(S&&S.messes||[]).forEach(buildMess);
   setupInput();requestAnimationFrame(loop);
   return true;
 }
@@ -1019,7 +1039,7 @@ function goPage(i,instant){
   renderPanel(true);renderHead();
   const d=D();
   if(M.ball){M.scene.remove(M.ball.node);M.ball=null;M.fetch=null}
-  if(M.potty&&i!==4){M.potty=false;peeStop();M.dog.A.act=null}
+  if(i!==4){M.pottyGo=false;if(M.potty){M.potty=false;peeStop()}}
   if(M.dog)M.dog.A.act=null;M.actT=0;
   if(M.foam>0&&prev!==i){M.dog.foam.kids.length=0;M.foam=0}
   if(d.sleeping){if(M.dogPage!==3)placeDogAt(3);return}
@@ -1054,14 +1074,14 @@ function loop(ts){
   dog.setDirt(clamp((65-st.clean)/65,0,1)*(M.rinsing>0?Math.max(0,M.rinsing-.3):1));
   moveDog(dt,d);
   const room=M.rooms[M.dogPage];
-  dog.root.p=[M.pos[0],M.onSpot?room.spot.y:0,M.pos[2]];dog.root.r=[0,M.yaw,0];
+  let yUp=0;if(room.spot.y){const sp=spotOf(M.dogPage),dd=Math.hypot(M.pos[0]-sp[0],M.pos[2]-sp[2]),R=room.spotR||1.3;yUp=room.spot.y*clamp((R-dd)/(R*.55),0,1)}
+  M.dogY=(M.dogY||0)+(yUp-(M.dogY||0))*Math.min(1,dt*10);
+  dog.root.p=[M.pos[0],M.dogY,M.pos[2]];dog.root.r=[0,M.yaw,0];
   dog.update(dt);
   if(M.ball)updateBall(dt);
   updateParts(dt);
   if(M.rinsing>0){M.rinsing-=dt;for(const f of dog.foam.kids)f.s=f.s.map(v=>Math.max(0,v-dt*.25));if(M.rinsing<=0){dog.foam.kids.length=0;finishRinse()}}
   const bed=M.rooms[3];if(bed.lamp){const on=!d.sleeping;bed.lamp.mat.unlit=on;bed.lamp.mat.c=hex3(on?'#FFE27A':'#B8A65E')}
-  if(bed.lights)bed.lights.forEach((l,i)=>{const s=.07+.02*Math.sin(M.t*3+i);l.s=[s,s*1.25,s]});
-  M.rooms[6].kids.forEach((n,i)=>{if(n.mat&&n.mat.unlit&&n.s[2]===.02&&n.p[1]===4.6){const s=.07+.03*Math.sin(M.t*4+i)}});
   M.cam=camFor();
   M.eng.render(M.scene,M.cam,envFor());
   updateAnchors(d,st);
@@ -1075,13 +1095,14 @@ function moveDog(dt,d){
   if(tgt&&!busy){
     if(A.act&&!['sniff'].includes(A.act))A.act=null;
     const dx=tgt[0]-M.pos[0],dz=tgt[2]-M.pos[2],dist=Math.hypot(dx,dz);
-    if(dist>.07){
+    if(M.target&&!M.fetch){M.target.t=(M.target.t||0)+dt}
+    if(dist>.07&&!(M.target&&!M.fetch&&M.target.t>9)){
       M.onSpot=false;
       const want=Math.atan2(-dz,dx);let diff=((want-M.yaw+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;
       const turn=(M.vel>2.5?2.6:4.2)*dt;M.yaw+=clamp(diff,-turn,turn);
       let desired=dist<.7?maxV*Math.max(.25,dist/.7):maxV;if(Math.abs(diff)>1.1)desired*=.25;
       M.vel+=clamp(desired-M.vel,-7*dt,4.5*dt);
-      M.pos[0]+=Math.cos(M.yaw)*M.vel*dt;M.pos[2]-=Math.sin(M.yaw)*M.vel*dt;
+      M.pos[0]+=Math.cos(M.yaw)*M.vel*dt;M.pos[2]-=Math.sin(M.yaw)*M.vel*dt;avoid();
       A.move=Math.max(M.vel,Math.abs(diff)>.3?.45:0);return;
     }
     M.vel=0;A.move=0;M.runFast=false;
@@ -1099,12 +1120,12 @@ function moveDog(dt,d){
 const IDLE_ACTS=[['sniff',2.6,3],['scratch',2.2,1],['stretch',1.9,1],['yawn',1.6,1],['lookcam',2.4,2],['sit',4.5,2],['lie',6,1],['wag',2,2]];
 function idleBrain(dt,d){
   const A=M.dog.A;
+  const R=ROOMS[M.dogPage],st=cur(d);
+  if(R.id==='garden'&&st.potty>=35&&!M.potty&&!M.pottyGo&&M.dogPage===M.page){A.act=null;M.actT=0;startPotty();return}
   if(M.actT>0){M.actT-=dt;if(M.actT<=0){A.act=null;M.idle=1.5+Math.random()*2.5}return}
   M.idle-=dt;if(M.idle>0||M.dogPage!==M.page)return;
-  const R=ROOMS[M.dogPage],st=cur(d);
-  if(R.id==='garden'&&st.potty>=35&&!M.potty){startPotty();return}
   const r=Math.random();
-  if(R.wander&&r<.42){M.target={p:[roomX(M.dogPage)+(Math.random()-.5)*2.8,0,-.15+Math.random()*1.3],cb:()=>{M.onSpot=Math.hypot(M.pos[0]-spotOf(M.dogPage)[0],M.pos[2]-spotOf(M.dogPage)[2])<.2}};return}
+  if(R.wander&&r<.42){M.target={p:freeSpot(M.dogPage),cb:()=>{M.onSpot=Math.hypot(M.pos[0]-spotOf(M.dogPage)[0],M.pos[2]-spotOf(M.dogPage)[2])<.2}};return}
   const pool=[];for(const[a,dur,w]of IDLE_ACTS){let ww=w;if(a==='yawn'&&st.energy<40)ww+=3;if(a==='lie'&&st.energy<45)ww+=3;if((a==='lie'||a==='sit')&&['bath'].includes(R.id))ww=0;if(a==='sniff'&&R.id==='garden')ww+=3;for(let i=0;i<ww;i++)pool.push([a,dur])}
   const[a,dur]=pool[Math.random()*pool.length|0];A.act=a;M.actT=dur+Math.random()*1.5;if(a==='wag'||a==='lookcam')A.wag=dur;
   if(a==='yawn')setTimeout(()=>sfx('yip'),500);
@@ -1113,12 +1134,12 @@ function idleBrain(dt,d){
 /* ---- siku i kupa ---- */
 function startPotty(){
   const d=D(),A=M.dog.A,st=cur(d),male=d.sex!=='f';
-  M.potty=true;A.act=null;
+  if(M.pottyGo)return;M.pottyGo=true;A.act=null;M.actT=0;
   const rx=roomX(4);
-  const spot=male?[rx+(Math.random()<.5?-1.4:1.6),0,-2.6]:[rx+(Math.random()-.5)*2.4,0,-.4+Math.random()*.8];
+  const spot=male?[rx+(Math.random()<.5?-1.4:1.6),0,-2.05]:[rx+(Math.random()-.5)*2.4,0,-.4+Math.random()*.8];
   const doPoop=st.potty>60||Math.random()<.45;
-  M.target={p:spot,v:1.1,cb:()=>{
-    M.potty=true;
+  M.target={p:spot,v:1.3,cb:()=>{
+    M.pottyGo=false;if(M.dogPage!==4)return;M.potty=true;
     if(male)M.yaw=Math.PI/2+(Math.random()<.5?.4:-.4);
     A.act='sniff';
     setTimeout(()=>{if(!M.potty)return;A.act=male?'pee_m':'squat';peeStart(male);
@@ -1131,6 +1152,7 @@ function startPotty(){
   }};
 }
 function peeOrigin(male){const dog=M.dog;return male?M4.xf(dog.body.world,[-dog.P.L*.1,-dog.P.R*.85,0]):M4.xf(dog.hip.world,[-.02,-dog.P.R*.5,0])}
+setInterval(()=>{if(M.potty){M.pottyAge=(M.pottyAge||0)+1;if(M.pottyAge>15){M.potty=false;M.pottyAge=0;peeStop();if(M.dog)M.dog.A.act=null}}else M.pottyAge=0},1000);
 function peeStart(male){
   M.pee={male,t:0,ground:null};
   const o=peeOrigin(male);M.pee.ground=[o[0]+(male?.05:-.05),0,o[2]+(male?.18:0)];
@@ -1153,7 +1175,7 @@ function addMess(room,type,wp){
   S.messes=S.messes||[];S.messes.push(m);save();buildMess(m);
 }
 function buildMess(m){
-  const r=M.rooms[m.room];if(!r)return;const g=new Node();g.p=[m.x,0,m.z];r.add(g);
+  if(!M.rooms[m.room])return;const g=new Node();g.p=[roomX(m.room)+m.x,0,m.z];M.scene.add(g);
   if(m.type==='poop'){const pm=mat('#6B4426',.012,{soft:1,shiny:true});[[0,.06,.13],[.01,.15,.1],[0,.23,.065]].forEach(([x,y,s])=>{const n=g.add(new Node(geoSphere(),pm));n.p=[x,y,0];n.s=[s,s*.75,s]})}
   else{const n=g.add(new Node(geoSphere(),mat('#F2D24A',0,{alpha:.6,shiny:true})));n.p=[0,.012,0];n.s=[.45,.004,.36]}
   if(m.room!==4||m.type==='poop'){g.flies=[0,1].map(()=>{const f=g.add(new Node(geoSphere(),mat('#222222',0)));f.s=[.025,.025,.025];return f})}
@@ -1168,10 +1190,10 @@ function pickMess(ray){
 function cleanMess(g,x,y){
   const m=g.mess;S.messes=(S.messes||[]).filter(q=>q.id!==m.id);delete M.messNodes[m.id];
   const w=M4.xf(g.world,[0,.1,0]);for(let i=0;i<10;i++)spawnPart(w,'#FFFFFF',[(Math.random()-.5)*2,1.5+Math.random(),(Math.random()-.5)*2],.6,.035);
-  g.parent.remove(g);sfx('pop');floatAt(m.room===4?'Posprzątane! +1':'Czysto! ✨',x,y);if(m.room===4)S.coins+=1;quest('clean');save();renderHUD();
+  M.scene.remove(g);sfx('pop');floatAt(m.room===4?'Posprzątane! +1':'Czysto! ✨',x,y);if(m.room===4)S.coins+=1;quest('clean');save();renderHUD();
 }
 function checkAccident(){
-  if(!S||!M.dog||M.potty)return;const d=D();if(d.sleeping)return;
+  if(!S||!M.dog||M.potty||M.pottyGo)return;const d=D();if(d.sleeping)return;
   const st=cur(d);if(st.potty<100)return;
   if(M.dogPage===4){startPotty();return}
   const male=d.sex!=='f';const p=M.dog.tailWorld();
@@ -1181,6 +1203,13 @@ function checkAccident(){
   renderHUD();
 }
 
+function avoid(){
+  const r=M.rooms[M.dogPage];if(!r||!r.blocks)return;const rx=roomX(M.dogPage),k=M.dog.P.k;
+  for(const b of r.blocks){const dx=M.pos[0]-(rx+b.x),dz=M.pos[2]-b.z,dd=Math.hypot(dx,dz),mn=b.r+.45*k;
+    if(dd<mn&&dd>1e-4){M.pos[0]=rx+b.x+dx/dd*mn;M.pos[2]=b.z+dz/dd*mn}}
+  M.pos[2]=clamp(M.pos[2],-2.3,2.2);
+}
+function freeSpot(i){const r=M.rooms[i],rx=roomX(i);for(let n=0;n<20;n++){const x=(Math.random()-.5)*2.8,z=-.2+Math.random()*1.4;if(r.blocks.every(b=>Math.hypot(x-b.x,z-b.z)>b.r+.5)&&(!r.spotR||Math.hypot(x-r.spot.p[0],z-r.spot.p[2])>r.spotR))return[rx+x,0,z]}return spotOf(i)}
 function lerpAng(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;return a+d*t}
 function goTo(p,cb){M.target={p,cb};M.idle=99}
 function dogHere(){return M.dogPage===M.page&&Math.abs(M.off-M.page)<.05}
@@ -1316,10 +1345,14 @@ function doTrick(id){
   const d=D(),T=TRICKS.find(t=>t.id===id),A=M.dog.A;
   if(d.sleeping){sleepBlock();return}
   if(level()<T.lvl){toast(`${T.n} odblokuje się na poziomie więzi ${T.lvl}.`);return}
-  if(A.trick||M.fetch||A.eat>0||M.potty||!dogHere())return;
+  if(!dogHere()||M.dogPage!==M.page||!M.dog){toast('Poczekaj, aż pies przybiegnie.');return}
+  if(M.potty||M.pottyGo){toast(`${esc(d.name)} załatwia swoje sprawy. Chwilkę!`);return}
+  if(A.trick||A.eat>0)return;
+  if(M.fetch){toast('Najpierw niech przyniesie piłkę.');return}
   if(cur(d).energy<4){toast(`${esc(d.name)} ${Gx(d,'jest zbyt zmęczony','jest zbyt zmęczona')}.`);return}
+  M.target=null;M.vel=0;
   d.tricks=d.tricks||{};const lv=d.tricks[id]||0;
-  const chance=.3+lv*.007+(stage(d)==='pup'?-.1:0);
+  const chance=Math.min(1,.55+lv*.006-(stage(d)==='pup'?.1:0));
   M.target=null;A.act=null;M.actT=0;
   if(Math.random()<chance){
     A.trick={name:id,t:0,dur:T.dur};d.tricks[id]=Math.min(100,lv+12);
@@ -1327,8 +1360,8 @@ function doTrick(id){
     setTimeout(()=>{const h=M.anchors.head;if(h)floatAt(lv<100&&lv+12>=100?'Mistrz! 🏆':'Brawo! +'+coins,h[0],h[1]-30);sfx('coin')},T.dur*500);
     if(lv<100&&lv+12>=100)setTimeout(()=>toast(`${esc(d.name)} ${Gx(d,'opanował','opanowała')} sztuczkę ${T.n}! Teraz daje 3 monety.`),1200);
   }else{
-    A.trick={name:'huh',t:0,dur:1.3};d.tricks[id]=Math.min(100,lv+5);bump(d,{energy:-1});
-    const h=M.anchors.head;if(h)floatAt('?',h[0]+10,h[1]-30);
+    A.trick={name:'huh',t:0,dur:1.3};d.tricks[id]=Math.min(100,lv+8);bump(d,{energy:-1});
+    const h=M.anchors.head;if(h)floatAt('?',h[0]+10,h[1]-30);toast(`${esc(d.name)} jeszcze nie ${Gx(d,'zrozumiał','zrozumiała')}. Ćwicz dalej, nauka: ${Math.min(100,lv+8)}%`);
   }
   touch(d);renderPanel();renderHUD();
 }
@@ -1393,7 +1426,7 @@ function renderPanel(anim){
   }
   if(R.id==='wardrobe'){
     const pup=stage(d)==='pup';
-    h=`<div class="ptitle">Garderoba <small>${pup?'Maluch jest za mały na ubranka':'Przeciągnij psa, żeby go obrócić'}</small></div><div class="strip">${ITEMS.map(it=>{const own=S.owned.includes(it.id),on=(d.wear||{})[it.slot]===it.id;
+    h=`<div class="ptitle">Garderoba <small>Przeciągnij psa, żeby go obrócić</small></div><div class="strip">${ITEMS.map(it=>{const own=S.owned.includes(it.id),on=(d.wear||{})[it.slot]===it.id;
       return `<button class="it ${on?'on':''}" data-item="${it.id}"><span class="em">${it.e}</span><span class="nm">${it.n}</span><span class="pr">${own?(on?'Założone':'Załóż'):`<span class="coin"></span>${it.price}`}</span></button>`}).join('')}</div>`;
   }
   if(R.id==='arcade'){
