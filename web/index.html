@@ -228,6 +228,10 @@ input[type=text]{font:inherit;font-weight:600;font-size:1.05rem;padding:9px 12px
 .wheel{position:relative;width:150px;height:150px;flex:none;border-radius:50%;background:conic-gradient(#FFC94A 0 12.5%,#FF8DB8 0 25%,#6EC3F2 0 37.5%,#7DDA82 0 50%,#B9A2F5 0 62.5%,#FFB24A 0 75%,#F59BBE 0 87.5%,#9BD9FA 0);box-shadow:inset 0 0 0 5px #fff,0 6px 14px rgba(40,20,60,.2)}
 .wheel span{position:absolute;left:50%;top:50%;margin:-14px 0 0 -14px;width:28px;height:28px;display:grid;place-items:center;font-size:1.3rem}
 .wpin{position:absolute;left:87px;top:2px;font-size:1.2rem;color:#E0485E;text-shadow:0 1px 2px #fff;z-index:2}
+.gc.g7{background:linear-gradient(135deg,#7DDA82,#2F8F7A)}
+.pkbtns{position:absolute;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 26px);z-index:5;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pkb{width:74px;height:74px;border-radius:50%;background:linear-gradient(#FFE17A,var(--yellow));box-shadow:0 4px 0 var(--yellowD),0 6px 14px rgba(0,0,0,.25);font-weight:800;font-size:.78rem;color:#33264A;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.pkb .em{font-size:1.6rem}.pkb:active{transform:translateY(3px);box-shadow:0 1px 0 var(--yellowD)}
 .err{padding:30px;text-align:center;font-weight:700}
 @media (max-height:700px){.it{width:70px}.it .em{font-size:1.6rem}.ab{min-height:44px}.gc{min-height:70px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
@@ -1527,6 +1531,7 @@ function renderPanel(anim){
       <button class="gc g3" data-g="catch"><span class="tag3d">3D</span><span class="em">🍖</span><span><b>Łap smakołyki</b><small>Rekord: ${S.best.catch||0}</small></span></button>
       <button class="gc g5" data-g="frisbee"><span class="tag3d">3D</span><span class="em">🥏</span><span><b>Frisbee</b><small>Rekord: ${S.best.frisbee||0}</small></span></button>
       <button class="gc g6" data-g="cups"><span class="tag3d">3D</span><span class="em">🥣</span><span><b>Gdzie kość?</b><small>Rekord: ${S.best.cups||0}</small></span></button>
+      <button class="gc g7" data-g="park"><span class="tag3d">3D</span><span class="em">🌳</span><span><b>Park</b><small>${ROOM?'Razem z drugą osobą':'Swobodny spacer'}</small></span></button>
       <button class="gc g4" data-g="memory"><span class="em">🃏</span><span><b>Pary</b><small>${S.best.memory?`Najmniej ruchów: ${S.best.memory}`:'Pamięć'}</small></span></button></div>`;
   }
   if(anim&&panelPage!==M.page){T.classList.add('swap');panelPage=M.page;setTimeout(()=>{T.classList.remove('swap');renderPanel()},140);return}else T.innerHTML=h;
@@ -1542,7 +1547,7 @@ function panelClick(e){
     else{d.wear[it.slot]=d.wear[it.slot]===it.id?null:it.id;sfx('pop')}
     quest('dress');touch(d);M.dog.A.bounce=1;renderPanel();renderHUD()}
   if(b.id==='bRinse')rinse();
-  if(b.dataset.g){if(b.dataset.g!=='memory'&&d.sleeping){sleepBlock();return}({run:startRun,dig:startDig,catch:startCatch3D,frisbee:startFrisbee,cups:startCups,memory:startMemory})[b.dataset.g]()}
+  if(b.dataset.g){if(b.dataset.g!=='memory'&&d.sleeping){sleepBlock();return}({run:startRun,dig:startDig,catch:startCatch3D,frisbee:startFrisbee,cups:startCups,park:startPark,memory:startMemory})[b.dataset.g]()}
   const x=b.dataset.x;
   if(x==='sleep')toggleSleep();
   if(x==='ball')throwBall();
@@ -1785,6 +1790,9 @@ function handleMsg(m){
   if(m.type==='emote'){const h=M.anchors&&M.anchors.head;const x=h?h[0]:innerWidth/2,y=h?h[1]-40:innerHeight/2;
     for(let i=0;i<5;i++)setTimeout(()=>floatAt(m.emote,x+(Math.random()-.5)*120,y+(Math.random()-.5)*60),i*160);
     toast(`${who}: ${m.emote}`);if(M.dog){M.dog.A.wag=2;M.dog.A.bounce=1}bark(D())}
+  if(m.type==='park'){if(!$('#game').hidden)return;const el=$('#invite');el.hidden=false;el.dataset.id='park';
+    el.innerHTML=`<div class="result"><div class="rcard"><div class="updicon">🌳</div><h3>Park!</h3><p>${who} idzie z psem do parku. Dołączysz?</p><div class="setrow" style="justify-content:center"><button class="btn ghost" id="pkNo">Nie teraz</button><button class="btn love" id="pkYes">Idziemy!</button></div></div></div>`;
+    sfx('win');$('#pkNo').onclick=hideInvite;$('#pkYes').onclick=()=>{hideInvite();if(D().sleeping){sleepBlock();return}startPark()};return}
   if(m.type==='gift'){const g=GIFTS.find(x=>x.id===m.gift);if(!g)return;
     if(g.coins)S.coins+=g.coins;else S.inv[g.food]=(S.inv[g.food]||0)+1;save();renderHUD();renderPanel();sfx('win');
     const el=$('#invite');if(el.hidden){el.hidden=false;el.dataset.id='gift';el.innerHTML=`<div class="result"><div class="rcard"><div class="updicon">🎁</div><h3>Prezent!</h3><p>${who} ${g.coins?'przysyła Ci':'przysyła Ci'}:</p><div class="big-coins">${g.e} ${esc(g.n)}</div><button class="btn big" id="gOk">Dziękuję!</button></div></div>`;$('#gOk').onclick=()=>{hideInvite();sendInbox({type:'emote',emote:'❤️'}).catch(()=>{})}}
@@ -1899,6 +1907,7 @@ function duoSheet(){
     h+=`<div class="group">Wychowujcie razem</div>`;
     h+=d.room?`<p class="note">${esc(d.name)} jest waszym wspólnym jamnikiem. Karmienie, kąpiele i sztuczki widzicie oboje.</p>`
       :`<p class="note">Udostępnij ${esc(d.name)} drugiej osobie. Oboje będziecie się opiekować, a zmiany pojawią się na obu telefonach.</p><button class="btn ghost big" id="rShare">Wychowujmy razem: ${esc(d.name)}</button>`;
+    h+=`<div class="group">Park razem</div><p class="note">Wyjdźcie razem do parku. Każde steruje swoim psem, widzicie się nawzajem i możecie rzucać sobie kości.</p><button class="btn love big" id="rPark">🌳 Idę do parku</button>`;
     h+=`<div class="group">Zabawy razem</div><p class="note">${p&&isOnline(p)?'Wyzwij drugą osobę na pojedynek. Wygrany dostaje więcej monet.':'Pojedynki działają, gdy oboje macie otwartą grę.'}</p>
       <div class="acts" style="margin-bottom:8px"><button class="ab g" id="dTug" ${p&&isOnline(p)&&!duelBusy()?'':'disabled'}><span class="em">🪢</span>Przeciąganie liny</button><button class="ab b" id="dRace" ${p&&isOnline(p)&&!duelBusy()?'':'disabled'}><span class="em">🏁</span>Wyścig</button></div>
       <div class="group">Emotki</div><div class="acts emo">${EMOTES.map(e=>`<button class="ab w" data-emo="${e}" ${p?'':'disabled'}><span class="em">${e}</span></button>`).join('')}</div>
@@ -1918,6 +1927,7 @@ function duoSheet(){
         if(b.id==='rCreate')await roomCreate();else await roomJoin($('#rCode').value);toast(b.id==='rCreate'?'Pokój gotowy. Podaj kod drugiej osobie.':'Dołączono!')}
       if(b.id==='rShare'){const d=D();d.room=S.room;touch(d);await NET.put(`rooms/${S.room}/shared/${d.id}`,pub(d));toast(`${esc(d.name)} jest teraz wspólny.`)}
       if(b.id==='rDate')await askDate();
+      if(b.id==='rPark'){closeSheet();startPark();sendInbox({type:'park'}).catch(()=>{});return}
       if(b.id==='dTug')await askDuel('tug');
       if(b.id==='dRace')await askDuel('race');
       if(b.dataset.emo)await sendInbox({type:'emote',emote:b.dataset.emo});
@@ -2035,8 +2045,9 @@ function startMemory(){
 }
 
 /* ================= Aktualizacje ================= */
-const GAME_BUILD='2.0';
+const GAME_BUILD='2.1';
 const CHANGES={
+  '2.1':['Park razem: oba psy w jednym parku, każdy steruje swoim joystickiem','Rzucanie kości w parku, pies drugiej osoby może ją przechwycić','Szczekanie i sztuczki widoczne u obojga','Zaproszenie do parku przychodzi drugiej osobie'],
   '2.0':['Łaty na futrze nie przesuwają się już przy sztuczkach','10 nowych sztuczek: Leżeć, Kręć się, Służ, Ukłon, Daj głos, Piątka, Pan nie żyje, Pomachaj, Taniec, Salto','20 nowych ubrań: cylinder, kowbojski kapelusz, czapka Mikołaja, hełm wikinga, strój dinozaura, pszczółka i więcej','Garderoba z zakładkami: czapki, okulary, szyja, ubranka','Nowe gry: Frisbee i Gdzie kość?','Gra we dwoje: przeciąganie liny, wyścig, emotki i prezenty','Codzienne koło fortuny w Zadaniach'],
   '1.7':['Szczeniak jest widoczny w wannie, legowisku i na podeście','Kamera przybliża się do małego szczeniaka','Niższe brzegi legowiska'],
   '1.6':['Powiadomienie o aktualizacjach gry','Prezent 10 monet za każdą aktualizację'],
@@ -2441,6 +2452,131 @@ function startCups(){
   $('#gGo').onclick=e=>{e.stopPropagation();$('#gm').hidden=true;running=true};
   gameCleanup=()=>{if(running)finish();else{fxStop();hideGame()}};
   watchClose(()=>fxStop());
+}
+
+/* ---------- Park (razem) ---------- */
+function parkScene(H){
+  const sc=new Node();sc.add(skyNode());
+  sc.add(new Node(geoRBox(H+1,.2,H+1,.15),gm('#8FD48A',0,{pat:12,pc:hex3('#7DC777'),ps:1.2}))).p=[0,-.2,0];
+  for(let i=-H;i<=H;i+=1.1)for(const[fx,fz]of[[i,-H],[i,H],[-H,i],[H,i]]){const p=sc.add(new Node(geoRBox(.07,.5,.07,.03),gm('#FFFFFF',.015)));p.p=[fx,.5,fz]}
+  const path=sc.add(new Node(geoRBox(1.1,.02,H,.02),gm('#E9CC9C',0,{pat:12,pc:hex3('#DDBB86'),ps:2})));path.p=[0,.01,0];
+  const path2=sc.add(new Node(geoRBox(H,.02,1.1,.02),gm('#E9CC9C',0,{pat:12,pc:hex3('#DDBB86'),ps:2})));path2.p=[0,.012,0];
+  const pond=sc.add(new Node(GS,gm('#7CC6F0',0,{shiny:true,pat:12,pc:hex3('#9FD8F5'),ps:2})));pond.p=[6.5,.02,-6];pond.s=[2.6,.02,1.8];
+  for(let i=0;i<6;i++){const s=sc.add(new Node(GS,gm('#B4B0C2')));const a=i/6*Math.PI*2;s.p=[6.5+Math.cos(a)*2.7,.08,-6+Math.sin(a)*1.9];s.s=[.35,.15,.3]}
+  const trees=[{x:6.5,z:-6,r:2.4}];
+  for(let i=0;i<18;i++){let x,z;do{x=(Math.random()-.5)*(H*2-3);z=(Math.random()-.5)*(H*2-3)}while(Math.abs(x)<2.2||Math.abs(z)<2.2||Math.hypot(x-6.5,z+6)<3.5);const s=.9+Math.random()*.6;const tn=treeNode(s);tn.p=[x,0,z];sc.add(tn);trees.push({x,z,r:.55*s})}
+  for(let i=0;i<14;i++){const b=bushNode(.6+Math.random()*.5);let x=(Math.random()-.5)*(H*2-2),z=(Math.random()-.5)*(H*2-2);if(Math.abs(x)<1.6)x+=3;b.p=[x,0,z];sc.add(b)}
+  for(let i=0;i<40;i++){const f=sc.add(new Node(GS,gm(['#F28CB3','#FFE27A','#FFFFFF','#E04848','#C7B4F2'][i%5],.012)));f.p=[(Math.random()-.5)*H*2,.06,(Math.random()-.5)*H*2];f.s=[.1,.06,.1]}
+  for(const[x,z,r]of[[-2.4,4,0],[2.4,-4,Math.PI]]){const bn=sc.add(new Node());bn.p=[x,0,z];bn.r=[0,r,0];const wd=gm('#B9773E');
+    bn.add(new Node(geoRBox(1.1,.05,.28,.04),wd)).p=[0,.5,0];bn.add(new Node(geoRBox(1.1,.18,.04,.04),wd)).p=[0,.85,-.26];
+    for(const xx of[-.9,.9])bn.add(new Node(geoRBox(.05,.25,.22,.03),gm('#3A3F4A'))).p=[xx,.25,0];trees.push({x,z,r:1})}
+  for(const[x,z]of[[-5,-2],[-6.5,-2],[-8,-2]]){const hd=sc.add(new Node());hd.p=[x,0,z];for(const sd of[-1,1])hd.add(new Node(geoRBox(.05,.3,.05,.03),gm('#FFFFFF',.015))).p=[0,.3,sd*.7];
+    hd.add(new Node(geoCapsule(.04,1.4),gm('#E04848',.015,{pat:9,pc:hex3('#FFFFFF'),ps:8}))).r=[0,Math.PI/2,0];hd.kids[2].p=[0,.45,0]}
+  return{sc,trees};
+}
+function startPark(){
+  const d=D();if(d.sleeping){sleepBlock();return}
+  const online=!!(ROOM&&NET.ok()),code=online?ROOM.code:null;
+  openGame('Park',`<div class="gfull" id="g3"></div><div class="ghud"><span class="gp" id="pkWho">${online?'Czekam na drugą osobę…':'Sam w parku'}</span><span class="gp"><span class="coin"></span><b id="gC">0</b></span></div>
+    <div class="joy" id="joy"><i></i></div>
+    <div class="pkbtns"><button class="pkb" id="pkThrow"><span class="em">🦴</span>Rzuć</button><button class="pkb" id="pkBark"><span class="em">🗣️</span>Hau!</button><button class="pkb" id="pkTrick"><span class="em">⭐</span>Sztuczka</button>${online?'<button class="pkb" id="pkInv"><span class="em">📨</span>Zaproś</button>':''}</div>`);
+  const wrap=$('#g3');const H=14;const{sc,trees}=parkScene(H);
+  const dog=buildDog(d,{stage:stage(d),wear:d.wear});dog.A.tongue=true;sc.add(dog.root);
+  const pos=[0,0,3],me=S.pid;let yaw=Math.PI/2,camYaw=0,coins=0,t=0,sendT=0,lastSent='',held=null,closeT=0,closeness=0;
+  const coinsN=[];for(let i=0;i<20;i++){const x=(Math.random()-.5)*(H*2-2),z=(Math.random()-.5)*(H*2-2);if(trees.some(tr=>Math.hypot(tr.x-x,tr.z-z)<tr.r+.6))continue;const c=coinNode();c.p=[x,.55,z];sc.add(c);coinsN.push(c)}
+  const cam={eye:[0,4,8],target:[0,.8,0],fov:50,minAsp:.1};
+  // partner
+  let pd=null,pSig='',pPos=null,pYaw=0,pActAt=0;
+  const items={},localItems={};
+  const itemsSrc=()=>online?((ROOM&&ROOM.data.parkItems)||{}):localItems;
+  const joy=$('#joy'),knob=joy.querySelector('i');let jv=[0,0],jid=null;
+  const jset=e=>{const r=joy.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=(e.clientX-cx)/(r.width/2),dy=(e.clientY-cy)/(r.height/2);const l=Math.hypot(dx,dy);if(l>1){dx/=l;dy/=l}jv=[dx,-dy];knob.style.transform=`translate(${dx*36}px,${dy*36}px)`};
+  joy.addEventListener('pointerdown',e=>{jid=e.pointerId;try{joy.setPointerCapture(jid)}catch(_){}jset(e)});
+  joy.addEventListener('pointermove',e=>{if(e.pointerId===jid)jset(e)});
+  const jend=()=>{jid=null;jv=[0,0];knob.style.transform=''};joy.addEventListener('pointerup',jend);joy.addEventListener('pointercancel',jend);
+  const keys={};const kd=e=>{keys[e.code]=true},ku=e=>{keys[e.code]=false};window.addEventListener('keydown',kd);window.addEventListener('keyup',ku);
+  const floatOver=(p,txt)=>{if(!cam.vp)return;const sp=FX.eng.project(cam,p);floatAtFx(txt,sp[0],sp[1])};
+  let myAct=null;
+  const doAct=(type)=>{myAct={type,at:Date.now()};
+    if(type==='bark'){bark(d);floatOver(dog.headWorld(),'Hau! 🐾');dog.A.trick={name:'speak',t:0,dur:1.2}}
+    else{const tr=['jump','spin','roll','beg','dance'][Math.random()*5|0];myAct.trick=tr;dog.A.trick={name:tr,t:0,dur:tr==='dance'?2.4:1.5};S.coins+=0}
+    sendState(true)};
+  $('#pkBark').onclick=()=>doAct('bark');$('#pkTrick').onclick=()=>doAct('trick');
+  if($('#pkInv'))$('#pkInv').onclick=()=>{sendInbox({type:'park'}).then(()=>toast('Zaproszenie do parku wysłane')).catch(()=>toast('Brak połączenia'))};
+  $('#pkThrow').onclick=()=>{
+    const f=[Math.cos(yaw),0,-Math.sin(yaw)],dist=5+Math.random()*2;
+    const tx=clamp(pos[0]+f[0]*dist,-H+1,H-1),tz=clamp(pos[2]+f[2]*dist,-H+1,H-1);
+    const id=held||uid();held=null;
+    const it={sx:pos[0],sz:pos[2],tx,tz,at:Date.now(),by:me,held:''};
+    if(online)NET.put(`rooms/${code}/parkItems/${id}`,it).catch(()=>{});
+    localItems[id]=it;if(online){ROOM.data.parkItems=ROOM.data.parkItems||{};ROOM.data.parkItems[id]=it}
+    sfx('throw');dog.A.trick={name:'speak',t:0,dur:.5};
+    const src=itemsSrc(),ids=Object.keys(src).sort((a,b)=>src[a].at-src[b].at);
+    while(ids.length>6){const old=ids.shift();if(online)NET.del(`rooms/${code}/parkItems/${old}`).catch(()=>{});delete localItems[old];if(online&&ROOM.data.parkItems)delete ROOM.data.parkItems[old]}
+  };
+  function sendState(force){
+    if(!online)return;
+    const st={x:+pos[0].toFixed(2),z:+pos[2].toFixed(2),yaw:+yaw.toFixed(2),mv:+(dog.A.move||0).toFixed(1),at:Date.now(),name:S.player||'Gracz',dog:profile(d)};
+    if(myAct)st.act=myAct;
+    const sig=JSON.stringify([st.x,st.z,st.yaw,st.mv,myAct&&myAct.at]);
+    const now=Date.now();if(!force&&((sig===lastSent&&now-sendT<1500)||now-sendT<120))return;lastSent=sig;sendT=now;
+    NET.put(`rooms/${code}/park/${me}`,st).catch(()=>{});
+  }
+  fxMount(wrap,sc,cam,dt=>{
+    t+=dt;
+    // sterowanie
+    let jx=jv[0],jy=jv[1];if(keys.ArrowLeft)jx=-1;if(keys.ArrowRight)jx=1;if(keys.ArrowUp)jy=1;if(keys.ArrowDown)jy=-1;
+    const mag=Math.min(1,Math.hypot(jx,jy));
+    if(mag>.12&&!dog.A.trick){
+      const f=[Math.sin(camYaw),0,-Math.cos(camYaw)],r=[Math.cos(camYaw),0,Math.sin(camYaw)];
+      let dx=r[0]*jx+f[0]*jy,dz=r[2]*jx+f[2]*jy;const l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;
+      const sp=4.2*mag*(stage(d)==='pup'?.85:1);pos[0]+=dx*sp*dt;pos[2]+=dz*sp*dt;
+      pos[0]=clamp(pos[0],-H+.8,H-.8);pos[2]=clamp(pos[2],-H+.8,H-.8);
+      for(const tr of trees){const ddx=pos[0]-tr.x,ddz=pos[2]-tr.z,dd=Math.hypot(ddx,ddz),mn=tr.r+.45;if(dd<mn&&dd>0){pos[0]=tr.x+ddx/dd*mn;pos[2]=tr.z+ddz/dd*mn}}
+      yaw=lerpAng(yaw,Math.atan2(-dz,dx),Math.min(1,dt*10));
+      if(jy>-.3){const h=Math.atan2(dx,-dz);camYaw=lerpAng(camYaw,h,Math.min(1,dt*1.3*mag))}
+      dog.A.move=sp;
+    }else dog.A.move=0;
+    for(let i=coinsN.length-1;i>=0;i--){const c=coinsN[i];c.r[1]+=dt*3;if(Math.hypot(c.p[0]-pos[0],c.p[2]-pos[2])<.8){sc.remove(c);coinsN.splice(i,1);coins++;sfx('coin');$('#gC').textContent=coins}}
+    dog.root.p=pos.slice();dog.root.r=[0,yaw,0];dog.update(dt);
+    // partner
+    let pst=null;
+    if(online&&ROOM&&ROOM.data.park){for(const pid in ROOM.data.park)if(pid!==me){const s=ROOM.data.park[pid];if(s&&Date.now()-s.at<15000)pst=Object.assign({pid},s)}}
+    if(pst&&pst.dog){
+      const sig=JSON.stringify([pst.dog.coat,pst.dog.color,pst.dog.sex,pst.dog.stage,pst.dog.wear]);
+      if(sig!==pSig){if(pd)sc.remove(pd.root);pd=buildDog(pst.dog,{stage:pst.dog.stage||'adult',wear:pst.dog.wear});pd.A.tongue=true;sc.add(pd.root);pSig=sig;if(!pPos){pPos=[pst.x,0,pst.z];floatOver([pst.x,1.5,pst.z],'👋');toast(`${esc(pst.name)} jest w parku!`)}}
+      pPos[0]+=(pst.x-pPos[0])*Math.min(1,dt*8);pPos[2]+=(pst.z-pPos[2])*Math.min(1,dt*8);pYaw=lerpAng(pYaw,pst.yaw,Math.min(1,dt*10));
+      pd.A.move=Math.max(pst.mv,Math.hypot(pst.x-pPos[0],pst.z-pPos[2])>.3?3:0);
+      if(pst.act&&pst.act.at!==pActAt){pActAt=pst.act.at;if(pst.act.type==='bark'){sfx('bark');floatOver(pd.headWorld(),'Hau! 🐾');pd.A.trick={name:'speak',t:0,dur:1.2}}else if(pst.act.trick)pd.A.trick={name:pst.act.trick,t:0,dur:pst.act.trick==='dance'?2.4:1.5}}
+      pd.root.p=pPos.slice();pd.root.r=[0,pYaw,0];pd.update(dt);pd.root.visible=true;
+      $('#pkWho').textContent=`🐾 ${pst.name} z ${pst.dog.name}`;
+      const near=Math.hypot(pPos[0]-pos[0],pPos[2]-pos[2])<1.8;
+      if(near){closeT+=dt;if(closeT>2.5){closeT=0;closeness++;floatOver([(pos[0]+pPos[0])/2,1.6,(pos[2]+pPos[2])/2],'💕');dog.A.wag=2;pd.A.wag=2}}
+    }else if(pd){pd.root.visible=false;if(online)$('#pkWho').textContent='Druga osoba wyszła z parku'}
+    // przedmioty (kości)
+    const src=itemsSrc();
+    for(const id in items)if(!src[id]){sc.remove(items[id]);delete items[id]}
+    for(const id in src){const it=src[id];if(!it)continue;let n=items[id];if(!n){n=boneNode();n.s=[.8,.8,.8];sc.add(n);items[id]=n;n.t0=t}
+      if(it.held){const holder=it.held===me?dog:(pd&&it.held!==me?pd:null);if(holder){const m=holder.mouthWorld();n.p=[m[0],m[1]-.04,m[2]];n.r=[0,holder.root.r[1],0]}continue}
+      const k=Math.min(1,(t-n.t0)/.8);n.p=[it.sx+(it.tx-it.sx)*k,.12+Math.sin(Math.PI*k)*2.2,it.sz+(it.tz-it.sz)*k];n.r=[0,k*8,0];
+      if(k>=1&&!held&&Math.hypot(it.tx-pos[0],it.tz-pos[2])<.8){held=id;it.held=me;if(online)NET.patch(`rooms/${code}/parkItems/${id}`,{held:me}).catch(()=>{});
+        sfx('pop');const own=it.by===me;const c=own?1:3;coins+=c;$('#gC').textContent=coins;floatOver(dog.headWorld(),own?'Mam! +1':'Złapane! +3');dog.A.wag=2}
+    }
+    if(held&&src[held]&&src[held].held&&src[held].held!==me)held=null;
+    sendState(false);
+    const f=[Math.sin(camYaw),0,-Math.cos(camYaw)];
+    cam.eye=[pos[0]-f[0]*6.5,4.1,pos[2]-f[2]*6.5];cam.target=[pos[0]+f[0]*1.5,.7,pos[2]+f[2]*1.5];
+  });
+  FX.env=outdoorEnv();
+  const exit=()=>{
+    window.removeEventListener('keydown',kd);window.removeEventListener('keyup',ku);
+    if(online){NET.del(`rooms/${code}/park/${me}`).catch(()=>{});if(held)NET.patch(`rooms/${code}/parkItems/${held}`,{held:'',sx:pos[0],sz:pos[2],tx:pos[0],tz:pos[2],at:Date.now()}).catch(()=>{})}
+    const kk=Math.min(1,t/40);S.coins+=coins;bump(d,{fun:Math.round(25*kk)+Math.min(10,closeness*2),energy:-Math.round(14*kk),food:-Math.round(5*kk),potty:-Math.round(40*kk)});
+    if(t>10){quest('game');if(cur(d).potty<30)quest('potty')}addXP(Math.round(15*kk));save();
+    fxStop();hideGame();if(coins)toast(`Spacer udany! +${coins} monet`)};
+  gameCleanup=exit;
+  watchClose(()=>fxStop());
+  if(online)sendState(true);
 }
 
 </script>
