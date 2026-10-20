@@ -212,6 +212,10 @@ input[type=text]{font:inherit;font-weight:600;font-size:1.05rem;padding:9px 12px
 .opt[aria-pressed="true"]{background:linear-gradient(#FFE17A,var(--yellow));box-shadow:0 3px 0 var(--yellowD)}
 .sw2{width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.25);flex:none}
 #adopt input[type=text]{background:rgba(255,255,255,.85);color:#33264A}
+.rcard.upd ul{text-align:left;margin:8px 0 4px;padding-left:20px;font-weight:600;line-height:1.35}
+.rcard.upd li{margin:3px 0}
+.updicon{font-size:3rem;line-height:1;animation:cpop .8s ease-out}
+.updbanner{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 172px);white-space:nowrap;transform:translateX(-50%);z-index:95;background:linear-gradient(#A6EBAA,#7DDA82);color:#1F4A22;border-radius:16px;padding:9px 16px;font-weight:700;box-shadow:0 4px 0 #4EB357,0 8px 20px rgba(0,0,0,.2);max-width:92vw;animation:tin .3s ease-out}
 .err{padding:30px;text-align:center;font-weight:700}
 @media (max-height:700px){.it{width:70px}.it .em{font-size:1.6rem}.ab{min-height:44px}.gc{min-height:70px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
@@ -699,6 +703,7 @@ function buildDog(d,o){
       A.t+=dt;const t=A.t;
       const sleep=A.sleep,sad=A.mood==='sad'&&!sleep;
       let mv=A.move||(A.walking?1.2:0);
+      if(A.trick){A.trick.t=(A.trick.t||0)+dt;if(A.trick.t>=A.trick.dur)A.trick=null}
       const act=A.trick?A.trick.name:(A.act||null);
       if(act&&!['sniff','lookcam','wag'].includes(act))mv=0;
       // faza chodu
@@ -1517,6 +1522,7 @@ function showAdopt(extra){
     if(sel.age==='pup')dog.stats={food:80,clean:90,fun:80,energy:90};
     if(extra){if(S.coins<EXTRA_DOG_PRICE){toast('Za mało monet');return}S.coins-=EXTRA_DOG_PRICE;S.dogs.push(dog);S.active=dog.id}
     else S=fresh(dog);
+    try{if(!localStorage.getItem('hotdog_build'))localStorage.setItem('hotdog_build',GAME_BUILD)}catch(_){}
     ensureQuests();save();fxStop();el.hidden=true;el.innerHTML='';$('#ui').hidden=false;
     if(!M.eng&&!initMain())return;
     rebuildDog();goPage(0,true);renderHUD();publishProfile();
@@ -1823,6 +1829,34 @@ function startMemory(){
     else{lock=true;setTimeout(()=>{a.classList.remove('up');c.classList.remove('up');open=[];lock=false},800)}};
 }
 
+/* ================= Aktualizacje ================= */
+const GAME_BUILD='1.6';
+const CHANGES={
+  '1.6':['Powiadomienie o aktualizacjach gry','Prezent 10 monet za każdą aktualizację'],
+  '1.5':['Pies wstaje po sztuczkach i można robić kolejne','Otrząsanie po kąpieli i kopanie w Skarbach działają'],
+  '1.4':['Pies nie zawiesza się już przed wyjściem na siku','Łatwiejsza nauka sztuczek','Ubranka także dla szczeniaków','Pies omija meble','Płynniejsza gra']
+};
+function checkUpdateNote(){
+  let last=null;try{last=localStorage.getItem('hotdog_build')}catch(e){}
+  try{localStorage.setItem('hotdog_build',GAME_BUILD)}catch(e){}
+  if(!last||last===GAME_BUILD)return;
+  const keys=Object.keys(CHANGES).filter(k=>parseFloat(k)>parseFloat(last)).sort((x,y)=>parseFloat(y)-parseFloat(x));
+  const items=(keys.length?keys:[GAME_BUILD]).flatMap(k=>CHANGES[k]||[]).slice(0,8);
+  S.coins+=10;save();renderHUD();
+  const el=$('#invite');el.hidden=false;el.dataset.id='upd';
+  el.innerHTML=`<div class="result"><div class="rcard upd"><div class="updicon">🎉</div><h3>Gra zaktualizowana!</h3><p class="note">Wersja ${GAME_BUILD}${window.HOTDOG_VERSION?` (build ${esc(window.HOTDOG_VERSION)})`:''}</p>
+    <ul>${items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>
+    <div class="big-coins"><span class="coin"></span>+10</div><p class="note">Prezent za aktualizację</p>
+    <button class="btn big" id="updOk">Super!</button></div></div>`;
+  sfx('win');$('#updOk').onclick=()=>{el.hidden=true;el.innerHTML='';delete el.dataset.id};
+}
+function showUpdateBanner(){
+  if($('#updBanner'))return;
+  const b=document.createElement('button');b.id='updBanner';b.className='updbanner';
+  b.innerHTML='✨ Nowa wersja gry jest gotowa. <b>Uruchom ponownie</b>';
+  b.onclick=()=>{save();location.reload()};document.body.appendChild(b);
+}
+
 /* ================= Start ================= */
 window.hotdogBack=()=>{
   if(!$('#invite').hidden){$('#iNo')&&$('#iNo').click();return true}
@@ -1832,7 +1866,7 @@ window.hotdogBack=()=>{
   if(M.page!==0){goPage(0);return true}
   return false;
 };
-window.onHotdogUpdate=()=>{save();if($('#game').hidden&&$('#sheet').hidden&&$('#adopt').hidden)location.reload();else pendingReload=true};
+window.onHotdogUpdate=()=>{save();if($('#game').hidden&&$('#sheet').hidden&&$('#adopt').hidden&&$('#invite').hidden)location.reload();else{pendingReload=true;showUpdateBanner()}};
 function boot(){
   $('#panel').addEventListener('click',panelClick);
   $('#pgPrev').onclick=()=>goPage(M.page-1);$('#pgNext').onclick=()=>goPage(M.page+1);
@@ -1847,6 +1881,7 @@ function boot(){
   $('#ui').hidden=false;if(!initMain())return;rebuildDog();goPage(S.roomIdx||0,true);renderHUD();
   if(S.daily!==today()){S.daily=today();S.coins+=20;setTimeout(()=>toast('Codzienna nagroda: +20 monet'),600);renderHUD()}
   save();if(S.room&&NET.ok())roomConnect(S.room);
+  setTimeout(checkUpdateNote,900);
 }
 fetch('version.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(v=>{if(v)window.HOTDOG_VERSION=String(v.web)}).catch(()=>{});
 setInterval(()=>{if(!S||!$('#adopt').hidden)return;if($('#game').hidden){renderHUD();checkAccident()}if(S.quests&&S.quests.day!==today()){ensureQuests()}},1000);
