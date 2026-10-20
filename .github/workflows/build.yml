@@ -1,0 +1,117 @@
+name: Build My hotdog
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.unzip.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rozpakuj wrzucony plik .zip (jeśli jest)
+        id: unzip
+        run: |
+          shopt -s nullglob
+          for f in *.zip; do
+            echo "Rozpakowuję $f"
+            unzip -o "$f" -x '.github/*' -d .
+            git rm -q --cached "$f" || true
+            rm -f "$f"
+            CHANGED=1
+          done
+          if [ -n "$CHANGED" ]; then
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git add -A
+            git commit -m "Rozpakowano paczkę gry" || true
+            git push || true
+          fi
+          if [ -f android/settings.gradle.kts ] && [ -f web/index.html ]; then
+            echo "ready=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "Brak plików gry – wrzuć my-hotdog.zip do repozytorium."
+            echo "ready=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wersja gry i kopiowanie plików do APK
+        if: steps.unzip.outputs.ready == '1'
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          PAGES_URL="https://${OWNER,,}.github.io/${REPO}"
+          APK_VERSION=$(tr -d '[:space:]' < android/apk-version.txt)
+          printf '{"web": %s, "apk": %s, "apkUrl": "https://github.com/%s/releases/latest/download/my-hotdog.apk", "files": ["index.html", "config.js"]}\n' \
+            "${{ github.run_number }}" "$APK_VERSION" "${{ github.repository }}" > web/version.json
+          echo "PAGES_URL=$PAGES_URL" >> "$GITHUB_ENV"
+          echo "APK_VERSION=$APK_VERSION" >> "$GITHUB_ENV"
+          rm -rf android/app/src/main/assets/www
+          mkdir -p android/app/src/main/assets/www
+          cp -r web/. android/app/src/main/assets/www/
+
+      - uses: actions/setup-java@v4
+        if: steps.unzip.outputs.ready == '1'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.unzip.outputs.ready == '1'
+        with:
+          gradle-version: '8.9'
+
+      - name: Budowanie APK
+        if: steps.unzip.outputs.ready == '1'
+        working-directory: android
+        run: gradle assembleRelease -PpagesUrl="$PAGES_URL" --no-daemon --stacktrace
+
+      - name: Przygotuj plik APK
+        if: steps.unzip.outputs.ready == '1'
+        run: cp android/app/build/outputs/apk/release/app-release.apk my-hotdog.apk
+
+      - uses: actions/upload-artifact@v4
+        if: steps.unzip.outputs.ready == '1'
+        with:
+          name: my-hotdog-apk
+          path: my-hotdog.apk
+
+      - name: Wydanie na GitHub (Releases)
+        if: steps.unzip.outputs.ready == '1'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: My hotdog (build ${{ github.run_number }}, APK v${{ env.APK_VERSION }})
+          files: my-hotdog.apk
+          make_latest: true
+
+      - uses: actions/configure-pages@v5
+        if: steps.unzip.outputs.ready == '1'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.unzip.outputs.ready == '1'
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.ready == '1'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
