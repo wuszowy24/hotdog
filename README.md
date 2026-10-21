@@ -49,3 +49,14 @@ Na początku skryptu w `web/index.html`:
 - `EXTRA_DOG_PRICE` – cena adopcji kolejnego jamnika (150).
 
 Szczeniaki z randek rodzą się tylko z pary piesek i suczka.
+
+## Modele jamników (paczka Unity)
+
+Jamniki w grze to siatki z pliku `Jamniki_Pakiet_Unity.zip` (24 warianty OBJ). Paczka nie miała rigów, UV ani tekstur, więc:
+
+- skrypty w `tools/` (`convert.py`, `dump.py`, `obj.py`) rozkładają siatki na części, naprawiają odwrócone ściany, przesuwają oczy na powierzchnię głowy, liczą wagi skinningu do 28 kości i zapisują wynik w `web/index.html` (blok `const DACH=...`),
+- skinning liczy się w grze na procesorze (jedna siatka na psa),
+- tekstura (włosie, merle, pręgi, srokate łaty, dzik, podpalane znaczenia, wnętrze pyska) jest generowana w shaderze, bez UV,
+- animacje (chód, sztuczki, siku itd.) są liczone w kodzie i działają na szkielecie.
+
+W ustawieniach gry można wrócić do klasycznego modelu z kulek i kapsuł.
