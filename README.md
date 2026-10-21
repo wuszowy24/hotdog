@@ -60,3 +60,9 @@ Jamniki w grze to siatki z pliku `Jamniki_Pakiet_Unity.zip` (24 warianty OBJ). P
 - animacje (chód, sztuczki, siku itd.) są liczone w kodzie i działają na szkielecie.
 
 W ustawieniach gry można wrócić do klasycznego modelu z kulek i kapsuł.
+
+## Nowości w 2.4
+
+- **Samodzielne spłukiwanie piany:** namydl psa palcem, a potem przesuwaj palcem po nim jak prysznicem. Bąbelki znikają tam, gdzie spłuczesz, a po ostatnim dostajesz monety.
+- **Mini gry do nauki sztuczek:** dotknij sztuczki w ogrodzie. Każda ma własną grę (wyczucie czasu, refleks, rytm, pamięć, śledzenie przysmaku, kółka). Gwiazdki zwiększają procent nauki.
+- **Ulepszenia (⬆️ po prawej):** 8 rzeczy do rozwijania do 5. poziomu za monety. Dają stałe bonusy, a część zmienia wygląd pokoi.
